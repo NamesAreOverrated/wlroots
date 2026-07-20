@@ -1564,8 +1564,10 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			.clip = &render_region,
 		};
 		if (node->vfx) {
-			memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
-				sizeof(rect_opts.corner_radius));
+			float s = data->scale;
+			for (int i = 0; i < 4; i++) {
+				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
+			}
 		}
 		wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 		break;
@@ -1585,8 +1587,10 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				.clip = &render_region,
 			};
 			if (node->vfx) {
-				memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
-					sizeof(rect_opts.corner_radius));
+				float s = data->scale;
+				for (int i = 0; i < 4; i++) {
+					rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
+				}
 			}
 			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 			break;
@@ -1635,8 +1639,10 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			.wait_point = scene_buffer->wait_point,
 		};
 		if (node->vfx) {
-			memcpy(tex_opts.corner_radius, node->vfx->corner_radius,
-				sizeof(tex_opts.corner_radius));
+			float s = data->scale;
+			for (int i = 0; i < 4; i++) {
+				tex_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
+			}
 		}
 		wlr_render_pass_add_texture(data->render_pass, &tex_opts);
 
@@ -1672,10 +1678,22 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				},
 				.clip = &render_region,
 			};
-			memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
-				sizeof(rect_opts.corner_radius));
-			memcpy(rect_opts.border_thickness, node->vfx->border.thickness,
-				sizeof(rect_opts.border_thickness));
+			float s = data->scale;
+			for (int i = 0; i < 4; i++) {
+				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
+				rect_opts.inner_corner_radius[i] = node->vfx->inner_corner_radius[i] * s;
+			}
+			struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
+			float x_rel = (float)(entry->x - data->logical.x);
+			float y_rel = (float)(entry->y - data->logical.y);
+			float vw = (float)scene_vfx->width;
+			float vh = (float)scene_vfx->height;
+			float bt[4];
+			bt[0] = roundf((y_rel + node->vfx->border.thickness[0]) * s) - roundf(y_rel * s);
+			bt[1] = roundf((x_rel + vw) * s) - roundf((x_rel + vw - node->vfx->border.thickness[1]) * s);
+			bt[2] = roundf((y_rel + vh) * s) - roundf((y_rel + vh - node->vfx->border.thickness[2]) * s);
+			bt[3] = roundf((x_rel + node->vfx->border.thickness[3]) * s) - roundf(x_rel * s);
+			memcpy(rect_opts.border_thickness, bt, sizeof(bt));
 			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 		}
 		break;

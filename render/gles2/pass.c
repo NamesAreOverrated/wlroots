@@ -293,11 +293,14 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 	if (options->corner_radius[0] != 0 || options->corner_radius[1] != 0 ||
 			options->corner_radius[2] != 0 || options->corner_radius[3] != 0 ||
 			options->border_thickness[0] != 0 || options->border_thickness[1] != 0 ||
-			options->border_thickness[2] != 0 || options->border_thickness[3] != 0) {
+			options->border_thickness[2] != 0 || options->border_thickness[3] != 0 ||
+			options->inner_corner_radius[0] != 0 || options->inner_corner_radius[1] != 0 ||
+			options->inner_corner_radius[2] != 0 || options->inner_corner_radius[3] != 0) {
 		glUniform4f(renderer->shaders.quad.box,
 			box.x, box.y, box.width, box.height);
 		glUniform4fv(renderer->shaders.quad.corner_radius, 1, options->corner_radius);
 		glUniform4fv(renderer->shaders.quad.border_thickness, 1, options->border_thickness);
+		glUniform4fv(renderer->shaders.quad.inner_corner_radius, 1, options->inner_corner_radius);
 	}
 	render(&box, options->clip, renderer->shaders.quad.pos_attrib);
 	}

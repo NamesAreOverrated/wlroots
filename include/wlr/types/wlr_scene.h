@@ -61,7 +61,8 @@ enum wlr_scene_node_type {
 
 /** Static visual effects state (corner radius, border, shadow). */
 struct wlr_scene_node_vfx {
-	float corner_radius[4]; // tl, tr, br, bl
+	float corner_radius[4]; // tl, tr, br, bl — outer corner radius
+	float inner_corner_radius[4]; // tl, tr, br, bl — inner corner radius (border inset), 0 = square
 	struct {
 		float thickness[4]; // top, right, bottom, left
 		float color[4]; // premultiplied RGBA
