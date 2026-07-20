@@ -56,6 +56,28 @@ enum wlr_scene_node_type {
 	WLR_SCENE_NODE_TREE,
 	WLR_SCENE_NODE_RECT,
 	WLR_SCENE_NODE_BUFFER,
+	WLR_SCENE_NODE_VFX,
+};
+
+/** Static visual effects state (corner radius, border, shadow). */
+struct wlr_scene_node_vfx {
+	float corner_radius[4]; // tl, tr, br, bl
+	struct {
+		float thickness[4]; // top, right, bottom, left
+		float color[4]; // premultiplied RGBA
+	} border;
+	struct {
+		float blur_sigma;
+		float opacity;
+		float color[4]; // premultiplied RGBA
+	} shadow;
+};
+
+/** Tweened visual override state (written by animation tick). */
+struct wlr_scene_node_visual {
+	float x, y;
+	float width, height;
+	float opacity;
 };
 
 /** A node is an object in the scene. */
@@ -75,6 +97,9 @@ struct wlr_scene_node {
 	void *data;
 
 	struct wlr_addon_set addons;
+
+	struct wlr_scene_node_vfx *vfx;     // NULL = no VFX
+	struct wlr_scene_node_visual *visual; // NULL = no active animation
 
 	struct {
 		pixman_region32_t visible;
@@ -143,6 +168,12 @@ struct wlr_scene_rect {
 	struct wlr_scene_node node;
 	int width, height;
 	float color[4];
+};
+
+/** A scene-graph node drawing visual effects (borders, shadows, corners). */
+struct wlr_scene_vfx {
+	struct wlr_scene_node node;
+	int width, height;
 };
 
 struct wlr_scene_outputs_update_event {
@@ -466,6 +497,41 @@ void wlr_scene_rect_set_size(struct wlr_scene_rect *rect, int width, int height)
  * The color argument must be a premultiplied color value.
  */
 void wlr_scene_rect_set_color(struct wlr_scene_rect *rect, const float color[static 4]);
+
+/**
+ * Add a node displaying visual effects (borders, shadows, corners).
+ */
+struct wlr_scene_vfx *wlr_scene_vfx_create(struct wlr_scene_tree *parent,
+	int width, int height);
+
+/**
+ * If this node represents a wlr_scene_vfx, that VFX node will be returned.
+ * It is not legal to feed a node that does not represent a wlr_scene_vfx.
+ */
+struct wlr_scene_vfx *wlr_scene_vfx_from_node(struct wlr_scene_node *node);
+
+/**
+ * Change the size of an existing VFX node.
+ */
+void wlr_scene_vfx_set_size(struct wlr_scene_vfx *vfx, int width, int height);
+
+/**
+ * Set VFX state on a node (allocates node->vfx if NULL).
+ */
+void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
+	const struct wlr_scene_node_vfx *vfx);
+
+/**
+ * Set corner radius on a rect node (allocates node->vfx if NULL).
+ */
+void wlr_scene_rect_set_corner_radius(struct wlr_scene_rect *rect,
+	const float radius[static 4]);
+
+/**
+ * Set corner radius on a buffer node (allocates node->vfx if NULL).
+ */
+void wlr_scene_buffer_set_corner_radius(struct wlr_scene_buffer *buffer,
+	const float radius[static 4]);
 
 /**
  * Add a node displaying a buffer to the scene-graph.

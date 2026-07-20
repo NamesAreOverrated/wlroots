@@ -121,6 +121,8 @@ void wlr_scene_node_destroy(struct wlr_scene_node *node) {
 		assert(wl_list_empty(&scene_buffer->events.outputs_update.listener_list));
 		assert(wl_list_empty(&scene_buffer->events.output_sample.listener_list));
 		assert(wl_list_empty(&scene_buffer->events.frame_done.listener_list));
+	} else if (node->type == WLR_SCENE_NODE_VFX) {
+		// No special cleanup needed for VFX nodes
 	} else if (node->type == WLR_SCENE_NODE_TREE) {
 		struct wlr_scene_tree *scene_tree = wlr_scene_tree_from_node(node);
 
@@ -149,6 +151,8 @@ void wlr_scene_node_destroy(struct wlr_scene_node *node) {
 
 	wl_list_remove(&node->link);
 	pixman_region32_fini(&node->visible);
+	free(node->vfx);
+	free(node->visual);
 	free(node);
 }
 
@@ -221,7 +225,8 @@ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box
 		}
 		break;
 	case WLR_SCENE_NODE_RECT:
-	case WLR_SCENE_NODE_BUFFER:;
+	case WLR_SCENE_NODE_BUFFER:
+	case WLR_SCENE_NODE_VFX:;
 		struct wlr_box node_box = { .x = lx, .y = ly };
 		scene_node_get_size(node, &node_box.width, &node_box.height);
 
@@ -270,6 +275,8 @@ static void scene_node_opaque_region(struct wlr_scene_node *node, int x, int y,
 			pixman_region32_translate(opaque, x, y);
 			return;
 		}
+	} else if (node->type == WLR_SCENE_NODE_VFX) {
+		return;
 	}
 
 	pixman_region32_fini(opaque);
@@ -772,6 +779,91 @@ void wlr_scene_rect_set_color(struct wlr_scene_rect *rect, const float color[sta
 	scene_node_update(&rect->node, NULL);
 }
 
+struct wlr_scene_vfx *wlr_scene_vfx_from_node(struct wlr_scene_node *node) {
+	assert(node->type == WLR_SCENE_NODE_VFX);
+	struct wlr_scene_vfx *vfx = wl_container_of(node, vfx, node);
+	return vfx;
+}
+
+struct wlr_scene_vfx *wlr_scene_vfx_create(struct wlr_scene_tree *parent,
+		int width, int height) {
+	assert(parent);
+	assert(width >= 0 && height >= 0);
+
+	struct wlr_scene_vfx *vfx = calloc(1, sizeof(*vfx));
+	if (vfx == NULL) {
+		return NULL;
+	}
+	scene_node_init(&vfx->node, WLR_SCENE_NODE_VFX, parent);
+
+	vfx->width = width;
+	vfx->height = height;
+
+	scene_node_update(&vfx->node, NULL);
+
+	return vfx;
+}
+
+void wlr_scene_vfx_set_size(struct wlr_scene_vfx *vfx, int width, int height) {
+	if (vfx->width == width && vfx->height == height) {
+		return;
+	}
+
+	assert(width >= 0 && height >= 0);
+
+	vfx->width = width;
+	vfx->height = height;
+	scene_node_update(&vfx->node, NULL);
+}
+
+void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
+		const struct wlr_scene_node_vfx *vfx) {
+	if (vfx == NULL) {
+		free(node->vfx);
+		node->vfx = NULL;
+		scene_node_update(node, NULL);
+		return;
+	}
+
+	if (node->vfx == NULL) {
+		node->vfx = calloc(1, sizeof(*node->vfx));
+		if (node->vfx == NULL) {
+			return;
+		}
+	}
+
+	memcpy(node->vfx, vfx, sizeof(*node->vfx));
+	scene_node_update(node, NULL);
+}
+
+void wlr_scene_rect_set_corner_radius(struct wlr_scene_rect *rect,
+		const float radius[static 4]) {
+	if (rect->node.vfx == NULL) {
+		rect->node.vfx = calloc(1, sizeof(*rect->node.vfx));
+		if (rect->node.vfx == NULL) {
+			return;
+		}
+	}
+
+	memcpy(rect->node.vfx->corner_radius, radius,
+		sizeof(rect->node.vfx->corner_radius));
+	scene_node_update(&rect->node, NULL);
+}
+
+void wlr_scene_buffer_set_corner_radius(struct wlr_scene_buffer *buffer,
+		const float radius[static 4]) {
+	if (buffer->node.vfx == NULL) {
+		buffer->node.vfx = calloc(1, sizeof(*buffer->node.vfx));
+		if (buffer->node.vfx == NULL) {
+			return;
+		}
+	}
+
+	memcpy(buffer->node.vfx->corner_radius, radius,
+		sizeof(buffer->node.vfx->corner_radius));
+	scene_node_update(&buffer->node, NULL);
+}
+
 static void scene_buffer_handle_buffer_release(struct wl_listener *listener,
 		void *data) {
 	struct wlr_scene_buffer *scene_buffer =
@@ -1201,6 +1293,11 @@ void scene_node_get_size(struct wlr_scene_node *node, int *width, int *height) {
 			wlr_output_transform_coords(scene_buffer->transform, width, height);
 		}
 		break;
+	case WLR_SCENE_NODE_VFX:;
+		struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
+		*width = scene_vfx->width;
+		*height = scene_vfx->height;
+		break;
 	}
 }
 
@@ -1456,7 +1553,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 	case WLR_SCENE_NODE_RECT:;
 		struct wlr_scene_rect *scene_rect = wlr_scene_rect_from_node(node);
 
-		wlr_render_pass_add_rect(data->render_pass, &(struct wlr_render_rect_options){
+		struct wlr_render_rect_options rect_opts = {
 			.box = dst_box,
 			.color = {
 				.r = scene_rect->color[0],
@@ -1465,14 +1562,18 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				.a = scene_rect->color[3],
 			},
 			.clip = &render_region,
-		});
+		};
+		if (node->vfx) {
+			memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
+				sizeof(rect_opts.corner_radius));
+		}
+		wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 		break;
 	case WLR_SCENE_NODE_BUFFER:;
 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
 
 		if (scene_buffer->is_single_pixel_buffer) {
-			// Render the buffer as a rect, this is likely to be more efficient
-			wlr_render_pass_add_rect(data->render_pass, &(struct wlr_render_rect_options){
+			struct wlr_render_rect_options rect_opts = {
 				.box = dst_box,
 				.color = {
 					.r = (float)scene_buffer->single_pixel_buffer_color[0] / (float)UINT32_MAX,
@@ -1482,7 +1583,12 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 						(float)UINT32_MAX * scene_buffer->opacity,
 				},
 				.clip = &render_region,
-			});
+			};
+			if (node->vfx) {
+				memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
+					sizeof(rect_opts.corner_radius));
+			}
+			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 			break;
 		}
 
@@ -1509,7 +1615,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			WLR_COLOR_TRANSFER_FUNCTION_SRGB, &srgb_lum);
 		float luminance_multiplier = get_luminance_multiplier(&src_lum, &srgb_lum);
 
-		wlr_render_pass_add_texture(data->render_pass, &(struct wlr_render_texture_options) {
+		struct wlr_render_texture_options tex_opts = {
 			.texture = texture,
 			.src_box = scene_buffer->src_box,
 			.dst_box = dst_box,
@@ -1527,7 +1633,12 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			.luminance_multiplier = &luminance_multiplier,
 			.wait_timeline = scene_buffer->wait_timeline,
 			.wait_point = scene_buffer->wait_point,
-		});
+		};
+		if (node->vfx) {
+			memcpy(tex_opts.corner_radius, node->vfx->corner_radius,
+				sizeof(tex_opts.corner_radius));
+		}
+		wlr_render_pass_add_texture(data->render_pass, &tex_opts);
 
 		struct wlr_scene_output_sample_event sample_event = {
 			.output = data->output,
@@ -1545,6 +1656,28 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			});
 		}
 
+		break;
+	case WLR_SCENE_NODE_VFX:;
+		if (node->vfx && (node->vfx->border.thickness[0] > 0 ||
+				node->vfx->border.thickness[1] > 0 ||
+				node->vfx->border.thickness[2] > 0 ||
+				node->vfx->border.thickness[3] > 0)) {
+			struct wlr_render_rect_options rect_opts = {
+				.box = dst_box,
+				.color = {
+					.r = node->vfx->border.color[0],
+					.g = node->vfx->border.color[1],
+					.b = node->vfx->border.color[2],
+					.a = node->vfx->border.color[3],
+				},
+				.clip = &render_region,
+			};
+			memcpy(rect_opts.corner_radius, node->vfx->corner_radius,
+				sizeof(rect_opts.corner_radius));
+			memcpy(rect_opts.border_thickness, node->vfx->border.thickness,
+				sizeof(rect_opts.border_thickness));
+			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
+		}
 		break;
 	}
 

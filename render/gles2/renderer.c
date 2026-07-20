@@ -641,6 +641,9 @@ struct wlr_renderer *wlr_gles2_renderer_create(struct wlr_egl *egl) {
 	renderer->shaders.quad.proj = glGetUniformLocation(prog, "proj");
 	renderer->shaders.quad.color = glGetUniformLocation(prog, "color");
 	renderer->shaders.quad.pos_attrib = glGetAttribLocation(prog, "pos");
+	renderer->shaders.quad.box = glGetUniformLocation(prog, "u_box");
+	renderer->shaders.quad.corner_radius = glGetUniformLocation(prog, "u_corner_radius");
+	renderer->shaders.quad.border_thickness = glGetUniformLocation(prog, "u_border_thickness");
 
 	renderer->shaders.tex_rgba.program = prog =
 		link_program(renderer, common_vert_src, tex_rgba_frag_src);
@@ -651,7 +654,8 @@ struct wlr_renderer *wlr_gles2_renderer_create(struct wlr_egl *egl) {
 	renderer->shaders.tex_rgba.tex_proj = glGetUniformLocation(prog, "tex_proj");
 	renderer->shaders.tex_rgba.tex = glGetUniformLocation(prog, "tex");
 	renderer->shaders.tex_rgba.alpha = glGetUniformLocation(prog, "alpha");
-	renderer->shaders.tex_rgba.pos_attrib = glGetAttribLocation(prog, "pos");
+	renderer->shaders.tex_rgba.box = glGetUniformLocation(prog, "u_box");
+	renderer->shaders.tex_rgba.corner_radius = glGetUniformLocation(prog, "u_corner_radius");
 
 	renderer->shaders.tex_rgbx.program = prog =
 		link_program(renderer, common_vert_src, tex_rgbx_frag_src);
@@ -662,7 +666,8 @@ struct wlr_renderer *wlr_gles2_renderer_create(struct wlr_egl *egl) {
 	renderer->shaders.tex_rgbx.tex_proj = glGetUniformLocation(prog, "tex_proj");
 	renderer->shaders.tex_rgbx.tex = glGetUniformLocation(prog, "tex");
 	renderer->shaders.tex_rgbx.alpha = glGetUniformLocation(prog, "alpha");
-	renderer->shaders.tex_rgbx.pos_attrib = glGetAttribLocation(prog, "pos");
+	renderer->shaders.tex_rgbx.box = glGetUniformLocation(prog, "u_box");
+	renderer->shaders.tex_rgbx.corner_radius = glGetUniformLocation(prog, "u_corner_radius");
 
 	if (renderer->exts.OES_egl_image_external) {
 		renderer->shaders.tex_ext.program = prog =
@@ -674,6 +679,8 @@ struct wlr_renderer *wlr_gles2_renderer_create(struct wlr_egl *egl) {
 		renderer->shaders.tex_ext.tex_proj = glGetUniformLocation(prog, "tex_proj");
 		renderer->shaders.tex_ext.tex = glGetUniformLocation(prog, "tex");
 		renderer->shaders.tex_ext.alpha = glGetUniformLocation(prog, "alpha");
+		renderer->shaders.tex_ext.box = glGetUniformLocation(prog, "u_box");
+		renderer->shaders.tex_ext.corner_radius = glGetUniformLocation(prog, "u_corner_radius");
 		renderer->shaders.tex_ext.pos_attrib = glGetAttribLocation(prog, "pos");
 	}
 

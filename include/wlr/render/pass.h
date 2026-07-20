@@ -122,6 +122,9 @@ struct wlr_render_texture_options {
 	 */
 	struct wlr_drm_syncobj_timeline *wait_timeline;
 	uint64_t wait_point;
+
+	/* Corner radius for rounded corners (tl, tr, br, bl). Zero = square. */
+	float corner_radius[4];
 };
 
 /**
@@ -149,6 +152,10 @@ struct wlr_render_rect_options {
 	const pixman_region32_t *clip;
 	/* Blend mode */
 	enum wlr_render_blend_mode blend_mode;
+	/* Corner radius for rounded corners (tl, tr, br, bl). Zero = square. */
+	float corner_radius[4];
+	/* Border thickness (top, right, bottom, left). Zero = filled rect. */
+	float border_thickness[4];
 };
 
 /**

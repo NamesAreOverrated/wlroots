@@ -35,6 +35,8 @@ struct wlr_gles2_tex_shader {
 	GLint tex;
 	GLint alpha;
 	GLint pos_attrib;
+	GLint box;
+	GLint corner_radius;
 };
 
 struct wlr_gles2_renderer {
@@ -79,6 +81,9 @@ struct wlr_gles2_renderer {
 			GLint proj;
 			GLint color;
 			GLint pos_attrib;
+			GLint box;
+			GLint corner_radius;
+			GLint border_thickness;
 		} quad;
 		struct wlr_gles2_tex_shader tex_rgba;
 		struct wlr_gles2_tex_shader tex_rgbx;

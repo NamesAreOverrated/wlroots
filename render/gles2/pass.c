@@ -247,6 +247,13 @@ static void render_pass_add_texture(struct wlr_render_pass *wlr_pass,
 	set_proj_matrix(shader->proj, pass->projection_matrix, &dst_box);
 	set_tex_matrix(shader->tex_proj, options->transform, &src_fbox);
 
+	if (options->corner_radius[0] != 0 || options->corner_radius[1] != 0 ||
+			options->corner_radius[2] != 0 || options->corner_radius[3] != 0) {
+		glUniform4f(shader->box,
+			dst_box.x, dst_box.y, dst_box.width, dst_box.height);
+		glUniform4fv(shader->corner_radius, 1, options->corner_radius);
+	}
+
 	render(&dst_box, options->clip, shader->pos_attrib);
 
 	glBindTexture(texture->target, 0);
@@ -264,8 +271,13 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 	wlr_render_rect_options_get_box(options, wlr_buffer, &box);
 
 	push_gles2_debug(renderer);
-	enum wlr_render_blend_mode blend_mode =
-		color->a == 1.0 ? WLR_RENDER_BLEND_MODE_NONE : options->blend_mode;
+	enum wlr_render_blend_mode blend_mode;
+	if (options->border_thickness[0] != 0 || options->border_thickness[1] != 0 ||
+			options->border_thickness[2] != 0 || options->border_thickness[3] != 0) {
+		blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED;
+	} else {
+		blend_mode = color->a == 1.0 ? WLR_RENDER_BLEND_MODE_NONE : options->blend_mode;
+	}
 	if (blend_mode == WLR_RENDER_BLEND_MODE_NONE &&
 			options->clip == NULL &&
 			box.x == 0 && box.y == 0 &&
@@ -278,7 +290,16 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 		glUseProgram(renderer->shaders.quad.program);
 		set_proj_matrix(renderer->shaders.quad.proj, pass->projection_matrix, &box);
 		glUniform4f(renderer->shaders.quad.color, color->r, color->g, color->b, color->a);
-		render(&box, options->clip, renderer->shaders.quad.pos_attrib);
+	if (options->corner_radius[0] != 0 || options->corner_radius[1] != 0 ||
+			options->corner_radius[2] != 0 || options->corner_radius[3] != 0 ||
+			options->border_thickness[0] != 0 || options->border_thickness[1] != 0 ||
+			options->border_thickness[2] != 0 || options->border_thickness[3] != 0) {
+		glUniform4f(renderer->shaders.quad.box,
+			box.x, box.y, box.width, box.height);
+		glUniform4fv(renderer->shaders.quad.corner_radius, 1, options->corner_radius);
+		glUniform4fv(renderer->shaders.quad.border_thickness, 1, options->border_thickness);
+	}
+	render(&box, options->clip, renderer->shaders.quad.pos_attrib);
 	}
 
 	pop_gles2_debug(renderer);
