@@ -1664,10 +1664,13 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 
 		break;
 	case WLR_SCENE_NODE_VFX:;
-		if (node->vfx && (node->vfx->border.thickness[0] > 0 ||
+		if (node->vfx && ((node->vfx->border.thickness[0] > 0 ||
 				node->vfx->border.thickness[1] > 0 ||
 				node->vfx->border.thickness[2] > 0 ||
-				node->vfx->border.thickness[3] > 0)) {
+				node->vfx->border.thickness[3] > 0) ||
+				(node->vfx->shadow.blur_sigma > 0.0f &&
+				 node->vfx->shadow.opacity > 0.0f &&
+				 node->vfx->shadow.color[3] > 0.0f))) {
 			struct wlr_render_rect_options rect_opts = {
 				.box = dst_box,
 				.color = {
@@ -1688,12 +1691,24 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			float y_rel = (float)(entry->y - data->logical.y);
 			float vw = (float)scene_vfx->width;
 			float vh = (float)scene_vfx->height;
+			float ext = node->vfx->shadow.blur_sigma * 3.0f;
+			// Adjust VFX position/size to container rect for border computation
+			float x_adj = x_rel + ext;
+			float y_adj = y_rel + ext;
+			float w_adj = vw - 2.0f * ext;
+			float h_adj = vh - 2.0f * ext;
 			float bt[4];
-			bt[0] = roundf((y_rel + node->vfx->border.thickness[0]) * s) - roundf(y_rel * s);
-			bt[1] = roundf((x_rel + vw) * s) - roundf((x_rel + vw - node->vfx->border.thickness[1]) * s);
-			bt[2] = roundf((y_rel + vh) * s) - roundf((y_rel + vh - node->vfx->border.thickness[2]) * s);
-			bt[3] = roundf((x_rel + node->vfx->border.thickness[3]) * s) - roundf(x_rel * s);
+			bt[0] = roundf((y_adj + node->vfx->border.thickness[0]) * s) - roundf(y_adj * s);
+			bt[1] = roundf((x_adj + w_adj) * s) - roundf((x_adj + w_adj - node->vfx->border.thickness[1]) * s);
+			bt[2] = roundf((y_adj + h_adj) * s) - roundf((y_adj + h_adj - node->vfx->border.thickness[2]) * s);
+			bt[3] = roundf((x_adj + node->vfx->border.thickness[3]) * s) - roundf(x_adj * s);
 			memcpy(rect_opts.border_thickness, bt, sizeof(bt));
+			rect_opts.shadow_blur_sigma = node->vfx->shadow.blur_sigma * s;
+			rect_opts.shadow_opacity = node->vfx->shadow.opacity;
+			rect_opts.shadow_color.r = node->vfx->shadow.color[0];
+			rect_opts.shadow_color.g = node->vfx->shadow.color[1];
+			rect_opts.shadow_color.b = node->vfx->shadow.color[2];
+			rect_opts.shadow_color.a = node->vfx->shadow.color[3];
 			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 		}
 		break;

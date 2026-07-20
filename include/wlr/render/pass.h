@@ -158,6 +158,12 @@ struct wlr_render_rect_options {
 	float inner_corner_radius[4];
 	/* Border thickness (top, right, bottom, left). Zero = filled rect. */
 	float border_thickness[4];
+	/* Shadow blur sigma (standard deviation of gaussian). Zero = no shadow. */
+	float shadow_blur_sigma;
+	/* Shadow opacity (0.0 – 1.0). Multiplied by shadow_color.a. */
+	float shadow_opacity;
+	/* Shadow color (premultiplied RGBA). */
+	struct wlr_render_color shadow_color;
 };
 
 /**

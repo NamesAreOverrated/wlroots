@@ -295,12 +295,19 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 			options->border_thickness[0] != 0 || options->border_thickness[1] != 0 ||
 			options->border_thickness[2] != 0 || options->border_thickness[3] != 0 ||
 			options->inner_corner_radius[0] != 0 || options->inner_corner_radius[1] != 0 ||
-			options->inner_corner_radius[2] != 0 || options->inner_corner_radius[3] != 0) {
+			options->inner_corner_radius[2] != 0 || options->inner_corner_radius[3] != 0 ||
+			options->shadow_blur_sigma > 0.0f) {
 		glUniform4f(renderer->shaders.quad.box,
 			box.x, box.y, box.width, box.height);
 		glUniform4fv(renderer->shaders.quad.corner_radius, 1, options->corner_radius);
 		glUniform4fv(renderer->shaders.quad.border_thickness, 1, options->border_thickness);
 		glUniform4fv(renderer->shaders.quad.inner_corner_radius, 1, options->inner_corner_radius);
+		glUniform4f(renderer->shaders.quad.shadow,
+			options->shadow_blur_sigma, options->shadow_opacity, 0.0f,
+			options->shadow_blur_sigma * 3.0f);
+		glUniform4f(renderer->shaders.quad.shadow_color,
+			options->shadow_color.r, options->shadow_color.g,
+			options->shadow_color.b, options->shadow_color.a);
 	}
 	render(&box, options->clip, renderer->shaders.quad.pos_attrib);
 	}
