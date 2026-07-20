@@ -43,7 +43,7 @@ void main() {
 		vec2 inner_size = size - vec2(bt[3] + bt[1], bt[0] + bt[2]);
 		vec4 inner_r = u_inner_corner_radius;
 		float inner_d = corner_sdf(inner_pos, inner_size, inner_r);
-		float inner = 1.0 - step(0.0, -inner_d);
+		float inner = smoothstep(-fwidth(inner_d), 0.0, inner_d);
 
 		gl_FragColor = color * outer * inner;
 	} else if (has_corners > 0.0) {
