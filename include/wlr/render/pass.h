@@ -154,8 +154,6 @@ struct wlr_render_rect_options {
 	enum wlr_render_blend_mode blend_mode;
 	/* Corner radius for rounded corners (tl, tr, br, bl). Zero = square. */
 	float corner_radius[4];
-	/* Inner corner radius for border stroke (tl, tr, br, bl). Zero = square inner edge. */
-	float inner_corner_radius[4];
 	/* Border thickness (top, right, bottom, left). Zero = filled rect. */
 	float border_thickness[4];
 	/* Shadow blur sigma (standard deviation of gaussian). Zero = no shadow. */

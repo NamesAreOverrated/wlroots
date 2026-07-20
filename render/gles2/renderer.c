@@ -644,7 +644,6 @@ struct wlr_renderer *wlr_gles2_renderer_create(struct wlr_egl *egl) {
 	renderer->shaders.quad.box = glGetUniformLocation(prog, "u_box");
 	renderer->shaders.quad.corner_radius = glGetUniformLocation(prog, "u_corner_radius");
 	renderer->shaders.quad.border_thickness = glGetUniformLocation(prog, "u_border_thickness");
-	renderer->shaders.quad.inner_corner_radius = glGetUniformLocation(prog, "u_inner_corner_radius");
 	renderer->shaders.quad.shadow = glGetUniformLocation(prog, "u_shadow");
 	renderer->shaders.quad.shadow_color = glGetUniformLocation(prog, "u_shadow_color");
 

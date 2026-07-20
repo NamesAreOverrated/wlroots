@@ -10,7 +10,6 @@ varying vec2 v_texcoord;
 uniform vec4 color;
 uniform vec4 u_box;
 uniform vec4 u_corner_radius;
-uniform vec4 u_inner_corner_radius;
 uniform vec4 u_border_thickness;
 uniform vec4 u_shadow; // x=blur_sigma, y=opacity, z=unused, w=extension
 uniform vec4 u_shadow_color;
@@ -45,6 +44,12 @@ void main() {
 	float has_shadow = (u_shadow.x > 0.0 && u_shadow.y > 0.0
 		&& u_shadow_color.a > 0.0) ? 1.0 : 0.0;
 
+	vec4 inner_r;
+	inner_r[0] = max(0.0, u_corner_radius[0] - max(bt[0], bt[3]));
+	inner_r[1] = max(0.0, u_corner_radius[1] - max(bt[0], bt[1]));
+	inner_r[2] = max(0.0, u_corner_radius[2] - max(bt[1], bt[2]));
+	inner_r[3] = max(0.0, u_corner_radius[3] - max(bt[2], bt[3]));
+
 	vec4 result = vec4(0.0);
 
 	// 1. Shadow (behind everything)
@@ -55,7 +60,7 @@ void main() {
 		// Clip shadow from the content area (inside inner rect)
 		vec2 inner_pos = cpos - vec2(bt[3], bt[0]);
 		vec2 inner_size = csize - vec2(bt[3] + bt[1], bt[0] + bt[2]);
-		float inner_d = corner_sdf(inner_pos, inner_size, u_inner_corner_radius);
+		float inner_d = corner_sdf(inner_pos, inner_size, inner_r);
 		float content_mask = smoothstep(0.0, fwidth(inner_d), inner_d);
 
 		float a = content_mask * exp(-(dist * dist) / (2.0 * u_shadow.x * u_shadow.x));
@@ -69,7 +74,6 @@ void main() {
 
 		vec2 inner_pos = cpos - vec2(bt[3], bt[0]);
 		vec2 inner_size = csize - vec2(bt[3] + bt[1], bt[0] + bt[2]);
-		vec4 inner_r = u_inner_corner_radius;
 		float inner_d = corner_sdf(inner_pos, inner_size, inner_r);
 		float inner = smoothstep(-fwidth(inner_d), 0.0, inner_d);
 

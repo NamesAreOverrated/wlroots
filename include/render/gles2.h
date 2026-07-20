@@ -84,7 +84,6 @@ struct wlr_gles2_renderer {
 			GLint box;
 			GLint corner_radius;
 		GLint border_thickness;
-		GLint inner_corner_radius;
 		GLint shadow;
 		GLint shadow_color;
 	} quad;

@@ -818,6 +818,9 @@ void wlr_scene_vfx_set_size(struct wlr_scene_vfx *vfx, int width, int height) {
 
 void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
 		const struct wlr_scene_node_vfx *vfx) {
+	assert(node->type == WLR_SCENE_NODE_RECT ||
+		node->type == WLR_SCENE_NODE_BUFFER ||
+		node->type == WLR_SCENE_NODE_VFX);
 	if (vfx == NULL) {
 		free(node->vfx);
 		node->vfx = NULL;
@@ -1684,7 +1687,6 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			float s = data->scale;
 			for (int i = 0; i < 4; i++) {
 				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
-				rect_opts.inner_corner_radius[i] = node->vfx->inner_corner_radius[i] * s;
 			}
 			struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
 			float x_rel = (float)(entry->x - data->logical.x);
@@ -2041,6 +2043,18 @@ static bool scene_node_invisible(struct wlr_scene_node *node) {
 		struct wlr_scene_buffer *buffer = wlr_scene_buffer_from_node(node);
 
 		return buffer->buffer == NULL && buffer->texture == NULL;
+	} else if (node->type == WLR_SCENE_NODE_VFX) {
+		if (node->vfx == NULL) {
+			return true;
+		}
+		bool has_border = node->vfx->border.thickness[0] > 0 ||
+			node->vfx->border.thickness[1] > 0 ||
+			node->vfx->border.thickness[2] > 0 ||
+			node->vfx->border.thickness[3] > 0;
+		bool has_shadow = node->vfx->shadow.blur_sigma > 0.0f &&
+			node->vfx->shadow.opacity > 0.0f &&
+			node->vfx->shadow.color[3] > 0.0f;
+		return !has_border && !has_shadow;
 	}
 
 	return false;
