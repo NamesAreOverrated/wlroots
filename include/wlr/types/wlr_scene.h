@@ -73,11 +73,12 @@ struct wlr_scene_node_vfx {
 	} shadow;
 };
 
-/** Tweened visual override state (written by animation tick). */
+/** Tweened visual override state (written by animation engine). */
 struct wlr_scene_node_visual {
-	float x, y;
-	float width, height;
-	float opacity;
+	float x, y;            // position offset from node->x, node->y
+	float width, height;   // 0 = use real node size (absolute override)
+	float scale_x, scale_y; // 1.0 = normal (relative multiplier)
+	float opacity;         // 1.0 = opaque
 };
 
 /** A node is an object in the scene. */
@@ -333,6 +334,20 @@ void wlr_scene_node_set_enabled(struct wlr_scene_node *node, bool enabled);
  * Set the position of the node relative to its parent.
  */
 void wlr_scene_node_set_position(struct wlr_scene_node *node, int x, int y);
+/**
+ * Set visual animation override state on a node.
+ *
+ * Allocates node->visual if NULL.
+ * Set width/height to 0 to use the node's real size.
+ * Set opacity to 1.0 for fully opaque.
+ * Set x/y to 0 for no offset.
+ */
+void wlr_scene_node_set_visual(struct wlr_scene_node *node,
+	const struct wlr_scene_node_visual *visual);
+/**
+ * Clear the visual override. Frees node->visual and resets to normal rendering.
+ */
+void wlr_scene_node_clear_visual(struct wlr_scene_node *node);
 /**
  * Move the node right above the specified sibling.
  * Asserts that node and sibling are distinct and share the same parent.

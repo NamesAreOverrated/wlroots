@@ -1331,6 +1331,27 @@ void wlr_scene_node_set_position(struct wlr_scene_node *node, int x, int y) {
 	scene_node_update(node, NULL);
 }
 
+void wlr_scene_node_set_visual(struct wlr_scene_node *node,
+		const struct wlr_scene_node_visual *visual) {
+	if (node->visual == NULL) {
+		node->visual = calloc(1, sizeof(struct wlr_scene_node_visual));
+		if (node->visual == NULL) {
+			return;
+		}
+	}
+	*node->visual = *visual;
+	scene_node_update(node, NULL);
+}
+
+void wlr_scene_node_clear_visual(struct wlr_scene_node *node) {
+	if (node->visual == NULL) {
+		return;
+	}
+	free(node->visual);
+	node->visual = NULL;
+	scene_node_update(node, NULL);
+}
+
 void wlr_scene_node_place_above(struct wlr_scene_node *node,
 		struct wlr_scene_node *sibling) {
 	assert(node != sibling);
@@ -1541,6 +1562,46 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 		.y = y,
 	};
 	scene_node_get_size(node, &dst_box.width, &dst_box.height);
+
+	// Walk up parent chain to accumulate visual overrides from tree nodes.
+	float vis_scale_x = 1.0f, vis_scale_y = 1.0f;
+	float vis_alpha = 1.0f;
+	float vis_off_x = 0, vis_off_y = 0;
+	{
+		struct wlr_scene_node *p = node;
+		while (p) {
+			if (p->visual) {
+				if (p->visual->width > 0) {
+					dst_box.width = p->visual->width;
+				}
+				if (p->visual->height > 0) {
+					dst_box.height = p->visual->height;
+				}
+				if (p->visual->scale_x > 0) {
+					vis_scale_x *= p->visual->scale_x;
+				}
+				if (p->visual->scale_y > 0) {
+					vis_scale_y *= p->visual->scale_y;
+				}
+				vis_off_x += p->visual->x;
+				vis_off_y += p->visual->y;
+				dst_box.x += (int)p->visual->x;
+				dst_box.y += (int)p->visual->y;
+				vis_alpha *= p->visual->opacity;
+			}
+			p = p->parent ? &p->parent->node : NULL;
+		}
+		// Apply accumulated scale to dst_box (keep centered)
+		if (vis_scale_x != 1.0f || vis_scale_y != 1.0f) {
+			int sw = (int)(dst_box.width * vis_scale_x);
+			int sh = (int)(dst_box.height * vis_scale_y);
+			dst_box.x += (dst_box.width - sw) / 2;
+			dst_box.y += (dst_box.height - sh) / 2;
+			dst_box.width  = sw > 0 ? sw : 1;
+			dst_box.height = sh > 0 ? sh : 1;
+		}
+	}
+
 	transform_output_box(&dst_box, data);
 
 	pixman_region32_t opaque;
@@ -1556,13 +1617,15 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 	case WLR_SCENE_NODE_RECT:;
 		struct wlr_scene_rect *scene_rect = wlr_scene_rect_from_node(node);
 
+		float rect_alpha = scene_rect->color[3] * vis_alpha;
+
 		struct wlr_render_rect_options rect_opts = {
 			.box = dst_box,
 			.color = {
 				.r = scene_rect->color[0],
 				.g = scene_rect->color[1],
 				.b = scene_rect->color[2],
-				.a = scene_rect->color[3],
+				.a = rect_alpha,
 			},
 			.clip = &render_region,
 		};
@@ -1578,14 +1641,16 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
 
 		if (scene_buffer->is_single_pixel_buffer) {
+			float spb_alpha = (float)scene_buffer->single_pixel_buffer_color[3] /
+				(float)UINT32_MAX * scene_buffer->opacity * vis_alpha;
+
 			struct wlr_render_rect_options rect_opts = {
 				.box = dst_box,
 				.color = {
 					.r = (float)scene_buffer->single_pixel_buffer_color[0] / (float)UINT32_MAX,
 					.g = (float)scene_buffer->single_pixel_buffer_color[1] / (float)UINT32_MAX,
 					.b = (float)scene_buffer->single_pixel_buffer_color[2] / (float)UINT32_MAX,
-					.a = (float)scene_buffer->single_pixel_buffer_color[3] /
-						(float)UINT32_MAX * scene_buffer->opacity,
+					.a = spb_alpha,
 				},
 				.clip = &render_region,
 			};
@@ -1622,13 +1687,15 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			WLR_COLOR_TRANSFER_FUNCTION_SRGB, &srgb_lum);
 		float luminance_multiplier = get_luminance_multiplier(&src_lum, &srgb_lum);
 
+		float tex_alpha = scene_buffer->opacity * vis_alpha;
+
 		struct wlr_render_texture_options tex_opts = {
 			.texture = texture,
 			.src_box = scene_buffer->src_box,
 			.dst_box = dst_box,
 			.transform = transform,
 			.clip = &render_region,
-			.alpha = &scene_buffer->opacity,
+			.alpha = &tex_alpha,
 			.filter_mode = scene_buffer->filter_mode,
 			.blend_mode = !data->output->scene->calculate_visibility ||
 					!pixman_region32_empty(&opaque) ?
@@ -1674,13 +1741,15 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				(node->vfx->shadow.blur_sigma > 0.0f &&
 				 node->vfx->shadow.opacity > 0.0f &&
 				 node->vfx->shadow.color[3] > 0.0f))) {
+			float vfx_alpha = node->vfx->border.color[3] * vis_alpha;
+
 			struct wlr_render_rect_options rect_opts = {
 				.box = dst_box,
 				.color = {
 					.r = node->vfx->border.color[0],
 					.g = node->vfx->border.color[1],
 					.b = node->vfx->border.color[2],
-					.a = node->vfx->border.color[3],
+					.a = vfx_alpha,
 				},
 				.clip = &render_region,
 			};
@@ -1689,10 +1758,16 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
 			}
 			struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
-			float x_rel = (float)(entry->x - data->logical.x);
-			float y_rel = (float)(entry->y - data->logical.y);
+			// Apply accumulated visual offset and scale to VFX position/size
 			float vw = (float)scene_vfx->width;
 			float vh = (float)scene_vfx->height;
+			float x_rel = (float)(entry->x - data->logical.x) + vis_off_x;
+			float y_rel = (float)(entry->y - data->logical.y) + vis_off_y;
+			// Center-shrink VFX size like dst_box
+			vw = vw * vis_scale_x;
+			vh = vh * vis_scale_y;
+			x_rel += ((float)scene_vfx->width - vw) / 2.0f;
+			y_rel += ((float)scene_vfx->height - vh) / 2.0f;
 			float ext = node->vfx->shadow.blur_sigma * 3.0f;
 			// Adjust VFX position/size to container rect for border computation
 			float x_adj = x_rel + ext;
@@ -1706,7 +1781,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			bt[3] = roundf((x_adj + node->vfx->border.thickness[3]) * s) - roundf(x_adj * s);
 			memcpy(rect_opts.border_thickness, bt, sizeof(bt));
 			rect_opts.shadow_blur_sigma = node->vfx->shadow.blur_sigma * s;
-			rect_opts.shadow_opacity = node->vfx->shadow.opacity;
+			rect_opts.shadow_opacity = node->vfx->shadow.opacity * vis_alpha;
 			rect_opts.shadow_color.r = node->vfx->shadow.color[0];
 			rect_opts.shadow_color.g = node->vfx->shadow.color[1];
 			rect_opts.shadow_color.b = node->vfx->shadow.color[2];

@@ -12,6 +12,7 @@ wlr_files += files(
 	'output/render.c',
 	'output/state.c',
 	'output/swapchain.c',
+	'scene/animation.c',
 	'scene/drag_icon.c',
 	'scene/subsurface_tree.c',
 	'scene/surface.c',
