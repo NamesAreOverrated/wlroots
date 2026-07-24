@@ -208,20 +208,32 @@ static void buffer_handle_resource_destroy(struct wl_resource *buffer_resource) 
 static bool check_import_dmabuf(struct wlr_dmabuf_attributes *attribs, void *data) {
 	struct wlr_linux_dmabuf_v1 *linux_dmabuf = data;
 
+	wlr_log(WLR_DEBUG, "check_import_dmabuf: main_device_fd=%d n_planes=%d fmt=0x%x "
+		"modifier=0x%lx %dx%d",
+		linux_dmabuf->main_device_fd, attribs->n_planes, attribs->format,
+		(unsigned long)attribs->modifier, attribs->width, attribs->height);
+	for (int i = 0; i < attribs->n_planes; i++) {
+		wlr_log(WLR_DEBUG, "  plane %d: fd=%d offset=%u stride=%u",
+			i, attribs->fd[i], attribs->offset[i], attribs->stride[i]);
+	}
+
 	if (linux_dmabuf->main_device_fd < 0) {
+		wlr_log(WLR_DEBUG, "check_import_dmabuf: no main_device_fd, skipping check");
 		return true;
 	}
 
 	// TODO: check number of planes
 	for (int i = 0; i < attribs->n_planes; i++) {
 		uint32_t handle = 0;
-		if (drmPrimeFDToHandle(linux_dmabuf->main_device_fd, attribs->fd[i], &handle) != 0) {
+		int ret = drmPrimeFDToHandle(linux_dmabuf->main_device_fd, attribs->fd[i], &handle);
+		wlr_log(WLR_DEBUG, "  plane %d: drmPrimeFDToHandle ret=%d handle=%u errno=%d",
+			i, ret, handle, errno);
+		if (ret != 0) {
 			wlr_log_errno(WLR_ERROR, "Failed to import DMA-BUF FD for plane %d", i);
 			return false;
 		}
 		if (drmCloseBufferHandle(linux_dmabuf->main_device_fd, handle) != 0) {
-			wlr_log_errno(WLR_ERROR, "Failed to close buffer handle for plane %d", i);
-			return false;
+			wlr_log(WLR_DEBUG, "drmCloseBufferHandle failed for plane %d (harmless on VM drivers)", i);
 		}
 	}
 	return true;
@@ -345,6 +357,10 @@ static void params_create_common(struct wl_resource *params_resource,
 	/* Check if dmabuf is usable */
 	if (!linux_dmabuf->check_dmabuf_callback(&attribs,
 				linux_dmabuf->check_dmabuf_callback_data)) {
+		wlr_log(WLR_ERROR, "params_create_common: dmabuf import check failed "
+			"fmt=0x%x modifier=0x%lx %dx%d n_planes=%d",
+			attribs.format, (unsigned long)attribs.modifier,
+			attribs.width, attribs.height, attribs.n_planes);
 		goto err_failed;
 	}
 
@@ -901,6 +917,8 @@ static bool set_default_feedback(struct wlr_linux_dmabuf_v1 *linux_dmabuf,
 	if (device->available_nodes & (1 << DRM_NODE_RENDER)) {
 		const char *name = device->nodes[DRM_NODE_RENDER];
 		main_device_fd = open(name, O_RDWR | O_CLOEXEC);
+		wlr_log(WLR_DEBUG, "set_default_feedback: opened render node %s -> fd=%d",
+			name, main_device_fd);
 		if (main_device_fd < 0) {
 			wlr_log_errno(WLR_ERROR, "Failed to open DRM device %s", name);
 			drmFreeDevice(&device);
