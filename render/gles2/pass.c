@@ -276,7 +276,7 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 			options->border_thickness[2] != 0 || options->border_thickness[3] != 0) {
 		blend_mode = WLR_RENDER_BLEND_MODE_PREMULTIPLIED;
 	} else {
-		blend_mode = color->a == 1.0 ? WLR_RENDER_BLEND_MODE_NONE : options->blend_mode;
+		blend_mode = options->blend_mode;
 	}
 	if (blend_mode == WLR_RENDER_BLEND_MODE_NONE &&
 			options->clip == NULL &&
@@ -305,6 +305,12 @@ static void render_pass_add_rect(struct wlr_render_pass *wlr_pass,
 		glUniform4f(renderer->shaders.quad.shadow_color,
 			options->shadow_color.r, options->shadow_color.g,
 			options->shadow_color.b, options->shadow_color.a);
+	} else {
+		glUniform4f(renderer->shaders.quad.box, box.x, box.y, box.width, box.height);
+		glUniform4f(renderer->shaders.quad.corner_radius, 0, 0, 0, 0);
+		glUniform4f(renderer->shaders.quad.border_thickness, 0, 0, 0, 0);
+		glUniform4f(renderer->shaders.quad.shadow, 0, 0, 0, 0);
+		glUniform4f(renderer->shaders.quad.shadow_color, 0, 0, 0, 0);
 	}
 	render(&box, options->clip, renderer->shaders.quad.pos_attrib);
 	}

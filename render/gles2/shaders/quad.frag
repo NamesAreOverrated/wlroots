@@ -68,7 +68,7 @@ void main() {
 		result = u_shadow_color * a;
 	}
 
-	// 2. Border / filled rect (on top of shadow)
+	// 2. Border rim (independent — on top of shadow)
 	if (has_border > 0.0) {
 		float outer = corner_alpha(cpos, csize, u_corner_radius);
 
@@ -79,12 +79,12 @@ void main() {
 
 		float ba = outer * inner;
 		result = result * (1.0 - ba) + color * ba;
-	} else if (has_corners > 0.0) {
-		float ca = corner_alpha(cpos, csize, u_corner_radius);
-		result = result * (1.0 - ca) + color * ca;
-	} else {
-		result = result * (1.0 - color.a) + color;
+
+		gl_FragColor = result;
+		return;
 	}
 
-	gl_FragColor = result;
+	// Fallback: plain rect (no border) — just color * corner clip
+	float ca = corner_alpha(cpos, csize, u_corner_radius);
+	gl_FragColor = color * ca;
 }
