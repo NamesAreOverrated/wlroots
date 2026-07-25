@@ -84,7 +84,13 @@ void main() {
 		return;
 	}
 
-	// Fallback: plain rect (no border) — just color * corner clip
+	// 3. Shadow-only (no border) — shadow already in result
+	if (has_shadow > 0.0) {
+		gl_FragColor = result;
+		return;
+	}
+
+	// 4. Fallback: plain rect (no border, no shadow) — just color * corner clip
 	float ca = corner_alpha(cpos, csize, u_corner_radius);
 	gl_FragColor = color * ca;
 }
