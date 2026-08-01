@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wlr/backend.h>
@@ -121,8 +122,6 @@ void wlr_scene_node_destroy(struct wlr_scene_node *node) {
 		assert(wl_list_empty(&scene_buffer->events.outputs_update.listener_list));
 		assert(wl_list_empty(&scene_buffer->events.output_sample.listener_list));
 		assert(wl_list_empty(&scene_buffer->events.frame_done.listener_list));
-	} else if (node->type == WLR_SCENE_NODE_VFX) {
-		// No special cleanup needed for VFX nodes
 	} else if (node->type == WLR_SCENE_NODE_TREE) {
 		struct wlr_scene_tree *scene_tree = wlr_scene_tree_from_node(node);
 
@@ -225,8 +224,7 @@ static bool _scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box
 		}
 		break;
 	case WLR_SCENE_NODE_RECT:
-	case WLR_SCENE_NODE_BUFFER:
-	case WLR_SCENE_NODE_VFX:;
+	case WLR_SCENE_NODE_BUFFER:;
 		struct wlr_box node_box = { .x = lx, .y = ly };
 		scene_node_get_size(node, &node_box.width, &node_box.height);
 
@@ -248,6 +246,19 @@ static bool scene_nodes_in_box(struct wlr_scene_node *node, struct wlr_box *box,
 	return _scene_nodes_in_box(node, box, iterator, user_data, x, y);
 }
 
+static bool scene_node_vfx_active(struct wlr_scene_node *node) {
+	if (node->vfx == NULL) {
+		return false;
+	}
+	return node->vfx->border.thickness[0] > 0 ||
+		node->vfx->border.thickness[1] > 0 ||
+		node->vfx->border.thickness[2] > 0 ||
+		node->vfx->border.thickness[3] > 0 ||
+		(node->vfx->shadow.blur_sigma > 0.0f &&
+		 node->vfx->shadow.opacity > 0.0f &&
+		 node->vfx->shadow.color[3] > 0.0f);
+}
+
 static void scene_node_opaque_region(struct wlr_scene_node *node, int x, int y,
 		pixman_region32_t *opaque) {
 	int width, height;
@@ -255,11 +266,18 @@ static void scene_node_opaque_region(struct wlr_scene_node *node, int x, int y,
 
 	if (node->type == WLR_SCENE_NODE_RECT) {
 		struct wlr_scene_rect *scene_rect = wlr_scene_rect_from_node(node);
+		if (scene_node_vfx_active(node)) {
+			return;
+		}
 		if (scene_rect->color[3] != 1) {
 			return;
 		}
 	} else if (node->type == WLR_SCENE_NODE_BUFFER) {
 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
+
+		if (scene_node_vfx_active(node)) {
+			return;
+		}
 
 		if (!scene_buffer->buffer) {
 			return;
@@ -275,8 +293,6 @@ static void scene_node_opaque_region(struct wlr_scene_node *node, int x, int y,
 			pixman_region32_translate(opaque, x, y);
 			return;
 		}
-	} else if (node->type == WLR_SCENE_NODE_VFX) {
-		return;
 	}
 
 	pixman_region32_fini(opaque);
@@ -779,48 +795,14 @@ void wlr_scene_rect_set_color(struct wlr_scene_rect *rect, const float color[sta
 	scene_node_update(&rect->node, NULL);
 }
 
-struct wlr_scene_vfx *wlr_scene_vfx_from_node(struct wlr_scene_node *node) {
-	assert(node->type == WLR_SCENE_NODE_VFX);
-	struct wlr_scene_vfx *vfx = wl_container_of(node, vfx, node);
-	return vfx;
-}
-
-struct wlr_scene_vfx *wlr_scene_vfx_create(struct wlr_scene_tree *parent,
-		int width, int height) {
-	assert(parent);
-	assert(width >= 0 && height >= 0);
-
-	struct wlr_scene_vfx *vfx = calloc(1, sizeof(*vfx));
-	if (vfx == NULL) {
-		return NULL;
-	}
-	scene_node_init(&vfx->node, WLR_SCENE_NODE_VFX, parent);
-
-	vfx->width = width;
-	vfx->height = height;
-
-	scene_node_update(&vfx->node, NULL);
-
-	return vfx;
-}
-
-void wlr_scene_vfx_set_size(struct wlr_scene_vfx *vfx, int width, int height) {
-	if (vfx->width == width && vfx->height == height) {
-		return;
-	}
-
-	assert(width >= 0 && height >= 0);
-
-	vfx->width = width;
-	vfx->height = height;
-	scene_node_update(&vfx->node, NULL);
+float wlr_scene_vfx_shadow_extension(float blur_sigma) {
+	return blur_sigma * 3.0f;
 }
 
 void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
 		const struct wlr_scene_node_vfx *vfx) {
 	assert(node->type == WLR_SCENE_NODE_RECT ||
-		node->type == WLR_SCENE_NODE_BUFFER ||
-		node->type == WLR_SCENE_NODE_VFX);
+		node->type == WLR_SCENE_NODE_BUFFER);
 	if (vfx == NULL) {
 		free(node->vfx);
 		node->vfx = NULL;
@@ -1296,11 +1278,6 @@ void scene_node_get_size(struct wlr_scene_node *node, int *width, int *height) {
 			wlr_output_transform_coords(scene_buffer->transform, width, height);
 		}
 		break;
-	case WLR_SCENE_NODE_VFX:;
-		struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
-		*width = scene_vfx->width;
-		*height = scene_vfx->height;
-		break;
 	}
 }
 
@@ -1487,6 +1464,12 @@ static bool scene_node_at_iterator(struct wlr_scene_node *node,
 	double rx = at_data->lx - lx;
 	double ry = at_data->ly - ly;
 
+	// Nodes that only draw visual effects (border/shadow) are visual-only
+	// overlays and must not capture input events.
+	if (node->type == WLR_SCENE_NODE_RECT && scene_node_vfx_active(node)) {
+		return false;
+	}
+
 	if (node->type == WLR_SCENE_NODE_BUFFER) {
 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
 
@@ -1538,6 +1521,64 @@ struct render_list_entry {
 static float get_luminance_multiplier(const struct wlr_color_luminances *src_lum,
 		const struct wlr_color_luminances *dst_lum) {
 	return (dst_lum->reference / src_lum->reference) * (src_lum->max / dst_lum->max);
+}
+
+// Render a node that only draws visual effects (border/shadow). The node is
+// a plain rect whose bounds include the shadow expansion; the border color
+// lives in node->vfx->border.color.
+static void scene_entry_render_vfx(struct wlr_scene_node *node,
+		struct render_list_entry *entry, const struct render_data *data,
+		const struct wlr_box *dst_box, const pixman_region32_t *clip,
+		float vis_off_x, float vis_off_y,
+		float vis_scale_x, float vis_scale_y, float vis_alpha) {
+	int node_w, node_h;
+	scene_node_get_size(node, &node_w, &node_h);
+
+	float vfx_alpha = node->vfx->border.color[3] * vis_alpha;
+
+	struct wlr_render_rect_options rect_opts = {
+		.box = *dst_box,
+		.color = {
+			.r = node->vfx->border.color[0],
+			.g = node->vfx->border.color[1],
+			.b = node->vfx->border.color[2],
+			.a = vfx_alpha,
+		},
+		.clip = clip,
+	};
+	float s = data->scale;
+	for (int i = 0; i < 4; i++) {
+		rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
+	}
+	// Apply accumulated visual offset and scale to VFX position/size
+	float vw = (float)node_w;
+	float vh = (float)node_h;
+	float x_rel = (float)(entry->x - data->logical.x) + vis_off_x;
+	float y_rel = (float)(entry->y - data->logical.y) + vis_off_y;
+	// Center-shrink VFX size like dst_box
+	vw = vw * vis_scale_x;
+	vh = vh * vis_scale_y;
+	x_rel += ((float)node_w - vw) / 2.0f;
+	y_rel += ((float)node_h - vh) / 2.0f;
+	float ext = wlr_scene_vfx_shadow_extension(node->vfx->shadow.blur_sigma);
+	// Adjust VFX position/size to container rect for border computation
+	float x_adj = x_rel + ext;
+	float y_adj = y_rel + ext;
+	float w_adj = vw - 2.0f * ext;
+	float h_adj = vh - 2.0f * ext;
+	float bt[4];
+	bt[0] = roundf((y_adj + node->vfx->border.thickness[0]) * s) - roundf(y_adj * s);
+	bt[1] = roundf((x_adj + w_adj) * s) - roundf((x_adj + w_adj - node->vfx->border.thickness[1]) * s);
+	bt[2] = roundf((y_adj + h_adj) * s) - roundf((y_adj + h_adj - node->vfx->border.thickness[2]) * s);
+	bt[3] = roundf((x_adj + node->vfx->border.thickness[3]) * s) - roundf(x_adj * s);
+	memcpy(rect_opts.border_thickness, bt, sizeof(bt));
+	rect_opts.shadow_blur_sigma = node->vfx->shadow.blur_sigma * s;
+	rect_opts.shadow_opacity = node->vfx->shadow.opacity * vis_alpha;
+	rect_opts.shadow_color.r = node->vfx->shadow.color[0];
+	rect_opts.shadow_color.g = node->vfx->shadow.color[1];
+	rect_opts.shadow_color.b = node->vfx->shadow.color[2];
+	rect_opts.shadow_color.a = node->vfx->shadow.color[3];
+	wlr_render_pass_add_rect(data->render_pass, &rect_opts);
 }
 
 static void scene_entry_render(struct render_list_entry *entry, const struct render_data *data) {
@@ -1617,6 +1658,15 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 	case WLR_SCENE_NODE_RECT:;
 		struct wlr_scene_rect *scene_rect = wlr_scene_rect_from_node(node);
 
+		if (scene_node_vfx_active(node)) {
+			if (!data->output->output->renderer->features.vfx) {
+				break;
+			}
+			scene_entry_render_vfx(node, entry, data, &dst_box, &render_region,
+				vis_off_x, vis_off_y, vis_scale_x, vis_scale_y, vis_alpha);
+			break;
+		}
+
 		float rect_alpha = scene_rect->color[3] * vis_alpha;
 
 		struct wlr_render_rect_options rect_opts = {
@@ -1629,7 +1679,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			},
 			.clip = &render_region,
 		};
-		if (node->vfx) {
+		if (node->vfx && data->output->output->renderer->features.vfx) {
 			float s = data->scale;
 			for (int i = 0; i < 4; i++) {
 				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
@@ -1641,6 +1691,15 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 		struct wlr_scene_buffer *scene_buffer = wlr_scene_buffer_from_node(node);
 
 		if (scene_buffer->is_single_pixel_buffer) {
+			if (scene_node_vfx_active(node)) {
+				if (!data->output->output->renderer->features.vfx) {
+					break;
+				}
+				scene_entry_render_vfx(node, entry, data, &dst_box, &render_region,
+					vis_off_x, vis_off_y, vis_scale_x, vis_scale_y, vis_alpha);
+				break;
+			}
+
 			float spb_alpha = (float)scene_buffer->single_pixel_buffer_color[3] /
 				(float)UINT32_MAX * scene_buffer->opacity * vis_alpha;
 
@@ -1654,7 +1713,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 				},
 				.clip = &render_region,
 			};
-			if (node->vfx) {
+			if (node->vfx && data->output->output->renderer->features.vfx) {
 				float s = data->scale;
 				for (int i = 0; i < 4; i++) {
 					rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
@@ -1708,7 +1767,7 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			.wait_timeline = scene_buffer->wait_timeline,
 			.wait_point = scene_buffer->wait_point,
 		};
-		if (node->vfx) {
+		if (node->vfx && data->output->output->renderer->features.vfx) {
 			float s = data->scale;
 			for (int i = 0; i < 4; i++) {
 				tex_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
@@ -1732,62 +1791,6 @@ static void scene_entry_render(struct render_list_entry *entry, const struct ren
 			});
 		}
 
-		break;
-	case WLR_SCENE_NODE_VFX:;
-		if (node->vfx && ((node->vfx->border.thickness[0] > 0 ||
-				node->vfx->border.thickness[1] > 0 ||
-				node->vfx->border.thickness[2] > 0 ||
-				node->vfx->border.thickness[3] > 0) ||
-				(node->vfx->shadow.blur_sigma > 0.0f &&
-				 node->vfx->shadow.opacity > 0.0f &&
-				 node->vfx->shadow.color[3] > 0.0f))) {
-			float vfx_alpha = node->vfx->border.color[3] * vis_alpha;
-
-			struct wlr_render_rect_options rect_opts = {
-				.box = dst_box,
-				.color = {
-					.r = node->vfx->border.color[0],
-					.g = node->vfx->border.color[1],
-					.b = node->vfx->border.color[2],
-					.a = vfx_alpha,
-				},
-				.clip = &render_region,
-			};
-			float s = data->scale;
-			for (int i = 0; i < 4; i++) {
-				rect_opts.corner_radius[i] = node->vfx->corner_radius[i] * s;
-			}
-			struct wlr_scene_vfx *scene_vfx = wlr_scene_vfx_from_node(node);
-			// Apply accumulated visual offset and scale to VFX position/size
-			float vw = (float)scene_vfx->width;
-			float vh = (float)scene_vfx->height;
-			float x_rel = (float)(entry->x - data->logical.x) + vis_off_x;
-			float y_rel = (float)(entry->y - data->logical.y) + vis_off_y;
-			// Center-shrink VFX size like dst_box
-			vw = vw * vis_scale_x;
-			vh = vh * vis_scale_y;
-			x_rel += ((float)scene_vfx->width - vw) / 2.0f;
-			y_rel += ((float)scene_vfx->height - vh) / 2.0f;
-			float ext = node->vfx->shadow.blur_sigma * 3.0f;
-			// Adjust VFX position/size to container rect for border computation
-			float x_adj = x_rel + ext;
-			float y_adj = y_rel + ext;
-			float w_adj = vw - 2.0f * ext;
-			float h_adj = vh - 2.0f * ext;
-			float bt[4];
-			bt[0] = roundf((y_adj + node->vfx->border.thickness[0]) * s) - roundf(y_adj * s);
-			bt[1] = roundf((x_adj + w_adj) * s) - roundf((x_adj + w_adj - node->vfx->border.thickness[1]) * s);
-			bt[2] = roundf((y_adj + h_adj) * s) - roundf((y_adj + h_adj - node->vfx->border.thickness[2]) * s);
-			bt[3] = roundf((x_adj + node->vfx->border.thickness[3]) * s) - roundf(x_adj * s);
-			memcpy(rect_opts.border_thickness, bt, sizeof(bt));
-			rect_opts.shadow_blur_sigma = node->vfx->shadow.blur_sigma * s;
-			rect_opts.shadow_opacity = node->vfx->shadow.opacity * vis_alpha;
-			rect_opts.shadow_color.r = node->vfx->shadow.color[0];
-			rect_opts.shadow_color.g = node->vfx->shadow.color[1];
-			rect_opts.shadow_color.b = node->vfx->shadow.color[2];
-			rect_opts.shadow_color.a = node->vfx->shadow.color[3];
-			wlr_render_pass_add_rect(data->render_pass, &rect_opts);
-		}
 		break;
 	}
 
@@ -2113,23 +2116,11 @@ static bool scene_node_invisible(struct wlr_scene_node *node) {
 	} else if (node->type == WLR_SCENE_NODE_RECT) {
 		struct wlr_scene_rect *rect = wlr_scene_rect_from_node(node);
 
-		return rect->color[3] == 0.f;
+		return rect->color[3] == 0.f && !scene_node_vfx_active(node);
 	} else if (node->type == WLR_SCENE_NODE_BUFFER) {
 		struct wlr_scene_buffer *buffer = wlr_scene_buffer_from_node(node);
 
 		return buffer->buffer == NULL && buffer->texture == NULL;
-	} else if (node->type == WLR_SCENE_NODE_VFX) {
-		if (node->vfx == NULL) {
-			return true;
-		}
-		bool has_border = node->vfx->border.thickness[0] > 0 ||
-			node->vfx->border.thickness[1] > 0 ||
-			node->vfx->border.thickness[2] > 0 ||
-			node->vfx->border.thickness[3] > 0;
-		bool has_shadow = node->vfx->shadow.blur_sigma > 0.0f &&
-			node->vfx->shadow.opacity > 0.0f &&
-			node->vfx->shadow.color[3] > 0.0f;
-		return !has_border && !has_shadow;
 	}
 
 	return false;

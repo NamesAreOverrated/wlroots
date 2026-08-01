@@ -314,7 +314,12 @@ void wlr_scene_animation_cancel(struct wlr_scene_animation *anim) {
 	}
 	// Snap to final
 	if (anim->node) {
-		wlr_scene_node_set_visual(anim->node, &anim->to);
+		if (anim->position) {
+			wlr_scene_node_set_position(anim->node,
+				(int)anim->pos_to_x, (int)anim->pos_to_y);
+		} else {
+			wlr_scene_node_set_visual(anim->node, &anim->to);
+		}
 	}
 	wl_list_remove(&anim->link);
 	wl_list_remove(&anim->node_destroy.link);

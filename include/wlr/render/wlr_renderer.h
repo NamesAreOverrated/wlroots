@@ -57,6 +57,11 @@ struct wlr_renderer {
 		 * See struct wlr_drm_syncobj_timeline.
 		 */
 		bool timeline;
+		/**
+		 * Whether visual effects (rounded corners, borders, shadows) are
+		 * supported. Backends without support skip VFX entirely.
+		 */
+		bool vfx;
 	} features;
 
 	struct {

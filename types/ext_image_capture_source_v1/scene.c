@@ -45,8 +45,7 @@ static void _get_scene_node_extents(struct wlr_scene_node *node, int lx, int ly,
 		}
 		break;
 	case WLR_SCENE_NODE_RECT:
-	case WLR_SCENE_NODE_BUFFER:
-	case WLR_SCENE_NODE_VFX:;
+	case WLR_SCENE_NODE_BUFFER:;
 		struct wlr_box node_box = { .x = lx, .y = ly };
 		scene_node_get_size(node, &node_box.width, &node_box.height);
 

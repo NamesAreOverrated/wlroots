@@ -252,6 +252,10 @@ static void render_pass_add_texture(struct wlr_render_pass *wlr_pass,
 		glUniform4f(shader->box,
 			dst_box.x, dst_box.y, dst_box.width, dst_box.height);
 		glUniform4fv(shader->corner_radius, 1, options->corner_radius);
+	} else {
+		// Reset stale corner uniforms from a previous draw with this program
+		glUniform4f(shader->box, dst_box.x, dst_box.y, dst_box.width, dst_box.height);
+		glUniform4f(shader->corner_radius, 0, 0, 0, 0);
 	}
 
 	render(&dst_box, options->clip, shader->pos_attrib);

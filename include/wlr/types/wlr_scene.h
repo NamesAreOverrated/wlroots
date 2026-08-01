@@ -56,7 +56,6 @@ enum wlr_scene_node_type {
 	WLR_SCENE_NODE_TREE,
 	WLR_SCENE_NODE_RECT,
 	WLR_SCENE_NODE_BUFFER,
-	WLR_SCENE_NODE_VFX,
 };
 
 /** Static visual effects state (corner radius, border, shadow). */
@@ -169,12 +168,6 @@ struct wlr_scene_rect {
 	struct wlr_scene_node node;
 	int width, height;
 	float color[4];
-};
-
-/** A scene-graph node drawing visual effects (borders, shadows, corners). */
-struct wlr_scene_vfx {
-	struct wlr_scene_node node;
-	int width, height;
 };
 
 struct wlr_scene_outputs_update_event {
@@ -516,25 +509,14 @@ void wlr_scene_rect_set_color(struct wlr_scene_rect *rect, const float color[sta
 /**
  * Add a node displaying visual effects (borders, shadows, corners).
  */
-struct wlr_scene_vfx *wlr_scene_vfx_create(struct wlr_scene_tree *parent,
-	int width, int height);
-
-/**
- * If this node represents a wlr_scene_vfx, that VFX node will be returned.
- * It is not legal to feed a node that does not represent a wlr_scene_vfx.
- */
-struct wlr_scene_vfx *wlr_scene_vfx_from_node(struct wlr_scene_node *node);
-
-/**
- * Change the size of an existing VFX node.
- */
-void wlr_scene_vfx_set_size(struct wlr_scene_vfx *vfx, int width, int height);
-
-/**
- * Set VFX state on a node (allocates node->vfx if NULL).
- */
 void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
 	const struct wlr_scene_node_vfx *vfx);
+
+/**
+ * How far (in logical pixels) a shadow of the given blur sigma extends
+ * beyond the container rect. Used to size VFX-bearing nodes.
+ */
+float wlr_scene_vfx_shadow_extension(float blur_sigma);
 
 /**
  * Set corner radius on a rect node (allocates node->vfx if NULL).
