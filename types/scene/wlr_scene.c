@@ -815,6 +815,8 @@ void wlr_scene_node_set_vfx(struct wlr_scene_node *node,
 		if (node->vfx == NULL) {
 			return;
 		}
+	} else if (memcmp(node->vfx, vfx, sizeof(*node->vfx)) == 0) {
+		return;
 	}
 
 	memcpy(node->vfx, vfx, sizeof(*node->vfx));

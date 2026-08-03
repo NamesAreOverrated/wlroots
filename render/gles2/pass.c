@@ -57,7 +57,16 @@ static bool render_pass_submit(struct wlr_render_pass *wlr_pass) {
 			goto out;
 		}
 	} else {
+		// No DRM syncobj timeline available (e.g. vmwgfx). glFlush() is still
+		// required (no-flush -> black screen), but creating an EGL sync point
+		// afterward bounds the worst-case main-thread stall (measured ~20ms vs
+		// multi-second on the fully ~33MB host drain) by letting the host
+		// drain incrementally. It does NOT remove the sustained per-frame cost.
 		glFlush();
+		EGLSyncKHR fence = wlr_egl_create_sync(renderer->egl, -1);
+		if (fence != EGL_NO_SYNC_KHR) {
+			wlr_egl_destroy_sync(renderer->egl, fence);
+		}
 	}
 
 	ok = true;
