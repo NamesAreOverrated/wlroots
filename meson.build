@@ -15,7 +15,7 @@ project(
 version = meson.project_version().split('-')[0]
 version_major = version.split('.')[0]
 version_minor = version.split('.')[1]
-versioned_name = '@0@-@1@.@2@'.format(meson.project_name(), version_major, version_minor)
+versioned_name = 'wlroots-0.21-vfx'
 
 little_endian = target_machine.endian() == 'little'
 big_endian = target_machine.endian() == 'big'
